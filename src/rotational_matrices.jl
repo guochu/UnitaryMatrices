@@ -156,15 +156,16 @@ end
 function _rx_real!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	L = length(θs)
 	@assert length(rwork) >= 2*L
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 
 	for j in 1:size(x, 2)
 		for i in 1:L
-			sintheta, costheta = rwork[i], rwork[L+i]
+			sintheta, costheta = rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			# phase = exp(im*ϕs[i])
 			# sintheta, costheta = sincos(θs[i])
@@ -179,16 +180,17 @@ function _rx_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwo
 	L = div(length(θs), 2)
 	@assert length(rwork) >= 2*L
 	@assert length(cwork) >= L
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		cwork[i] = exp(im*θs[L+i])
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 
 	for j in 1:size(x, 2)
 		for i in 1:L
-			phase, sintheta, costheta = cwork[i], rwork[i], rwork[L+i]
+			phase, sintheta, costheta = cwork[i], rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			# phase = exp(im*ϕs[i])
 			# sintheta, costheta = sincos(θs[i])
@@ -202,22 +204,23 @@ end
 
 function _rxrd_real!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	L = length(θs)
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 
 	for j in 1:size(x, 2)
 		for i in 1:L
-			sintheta, costheta = rwork[i], rwork[L+i]
+			sintheta, costheta = rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			x1, x2 = x[pos, j], x[pos+1, j]
 			y[pos, j], y[pos+1, j] = _r2x_real(costheta, sintheta, x1, x2)
 		end
 	end
 	for i in 1:L
-		sintheta, costheta = rwork[i], rwork[L+i]
+		sintheta, costheta = rwork[i], rwork2[i]
 		pos = 2*i-1+start_pos
 		for j in 1:size(x, 1)
 			x1, x2 = y[j, pos], y[j, pos+1]		
@@ -231,23 +234,24 @@ function _rxrd_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, r
 	L = div(length(θs), 2)
 	@assert length(rwork) >= 2*L
 	@assert length(cwork) >= L
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		cwork[i] = exp(im*θs[L+i])
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 
 	for j in 1:size(x, 2)
 		for i in 1:L
-			phase, sintheta, costheta = cwork[i], rwork[i], rwork[L+i]
+			phase, sintheta, costheta = cwork[i], rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			x1, x2 = x[pos, j], x[pos+1, j]
 			y[pos, j], y[pos+1, j] = _r2x_cpx(phase, costheta, sintheta, x1, x2)
 		end
 	end
 	for i in 1:L
-		phase, sintheta, costheta = conj(cwork[i]), rwork[i], rwork[L+i]
+		phase, sintheta, costheta = conj(cwork[i]), rwork[i], rwork2[i]
 		pos = 2*i-1+start_pos
 		for j in 1:size(x, 1)
 			x1, x2 = y[j, pos], y[j, pos+1]		
@@ -263,16 +267,17 @@ end
 """
 function _∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	L = length(θs)
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 	Δ = convert(typeof(y), Δ)
 	∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		for i in 1:L
-			sintheta, costheta = -rwork[i], rwork[L+i]
+			sintheta, costheta = -rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			x1, x2 = y[pos, j], y[pos+1, j]
 			# compute y ← x = U† y
@@ -293,17 +298,18 @@ end
 """
 function _∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	L = div(length(θs), 2)
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		cwork[i] = exp(im*θs[L+i])
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 	Δ = convert(typeof(y), Δ)
 	∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		for i in 1:L
-			phase, sintheta, costheta = cwork[i], rwork[i], rwork[L+i]
+			phase, sintheta, costheta = cwork[i], rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			x1, x2 = y[pos, j], y[pos+1, j]
 			# compute y ← x = U† y
@@ -328,16 +334,17 @@ end
 """
 function _∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	L = length(θs)
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 	Δ = convert(typeof(y), Δ)
 	∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		for i in 1:L
-			sintheta, costheta = -rwork[i], rwork[L+i]
+			sintheta, costheta = -rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			x1, x2 = y[pos, j], y[pos+1, j]
 			# compute y ← x = U† y
@@ -348,7 +355,7 @@ function _∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::I
 		end
 	end	
 	for i in 1:L
-		sintheta, costheta = -rwork[i], rwork[L+i]
+		sintheta, costheta = -rwork[i], rwork2[i]
 		pos = 2*i-1+start_pos
 		for j in 1:size(y, 1)
 			x1, x2 = y[j, pos], y[j, pos+1]
@@ -374,17 +381,18 @@ end
 """
 function _∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	L = div(length(θs), 2)
+	rwork2 = view(rwork, L+1:2*L)
 	for i in 1:L
 		cwork[i] = exp(im*θs[L+i])
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
-		rwork[L+i] = costheta
+		rwork2[i] = costheta
 	end
 	Δ = convert(typeof(y), Δ)
 	∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		for i in 1:L
-			phase, sintheta, costheta = cwork[i], -rwork[i], rwork[L+i]
+			phase, sintheta, costheta = cwork[i], -rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			x1, x2 = y[pos, j], y[pos+1, j]
 			# compute y ← x = U† y
@@ -399,7 +407,7 @@ function _∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::In
 		end
 	end	
 	for i in 1:L
-		phase, sintheta, costheta = conj(cwork[i]), -rwork[i], rwork[L+i]
+		phase, sintheta, costheta = conj(cwork[i]), -rwork[i], rwork2[i]
 		pos = 2*i-1+start_pos
 		for j in 1:size(y, 1)
 			x1, x2 = y[j, pos], y[j, pos+1]
@@ -411,7 +419,7 @@ function _∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::In
 	end
 	for j in 1:size(y, 2)
 		for i in 1:L
-			phase, sintheta, costheta = cwork[i], rwork[i], rwork[L+i]
+			phase, sintheta, costheta = cwork[i], rwork[i], rwork2[i]
 			pos = 2*i-1+start_pos
 			# compute ∇U
 			a, b = _∇r2x_cpx(phase, costheta, sintheta, y[pos, j], y[pos+1, j], Δ[pos, j], Δ[pos+1, j])
