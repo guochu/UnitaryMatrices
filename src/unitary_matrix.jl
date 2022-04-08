@@ -85,7 +85,7 @@ Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractMatrix) = begin
 	y, rwork, cwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
-		Δ, ∇θ, x1 = pure_back_propagate(Δ, m, y, rwork, cwork)
+		Δ, ∇θ, x1 = pure_back_propagate(Δ, m, copy(y), rwork, cwork)
 		return ∇θ, Δ
 	end
 end
@@ -94,7 +94,7 @@ Zygote.@adjoint dm_evolve(m::UnitaryMatrix, x::AbstractMatrix) = begin
 	y, rwork, cwork = dm_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
-		Δ, ∇θ, x1 = dm_back_propagate(Δ, m, y, rwork, cwork)
+		Δ, ∇θ, x1 = dm_back_propagate(Δ, m, copy(y), rwork, cwork)
 		return ∇θ, Δ
 	end
 end

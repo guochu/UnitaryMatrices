@@ -68,7 +68,7 @@ dm_evolve(m::OrthogonalMatrix, x::AbstractMatrix) = dm_evolve_util(m, x)[1]
 Zygote.@adjoint pure_evolve(m::OrthogonalMatrix, x::AbstractMatrix) = begin
 	y, rwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
-		Δ, ∇θ, x1 = pure_back_propagate(Δ, m, y, rwork)
+		Δ, ∇θ, x1 = pure_back_propagate(Δ, m, copy(y), rwork)
 		return ∇θ, Δ
 	end
 end
@@ -76,7 +76,7 @@ end
 Zygote.@adjoint dm_evolve(m::OrthogonalMatrix, x::AbstractMatrix) = begin
 	y, rwork = dm_evolve_util(m, x)
 	return y, Δ -> begin
-		Δ, ∇θ, x1 = dm_back_propagate(Δ, m, y, rwork)
+		Δ, ∇θ, x1 = dm_back_propagate(Δ, m, copy(y), rwork)
 		return ∇θ, Δ
 	end
 end
