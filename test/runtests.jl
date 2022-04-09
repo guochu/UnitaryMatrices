@@ -3,7 +3,7 @@ push!(LOAD_PATH, "../src")
 include("util.jl")
 
 using Test
-using Zygote
+using Zygote, TensorOperations
 using UnitaryMatrices
 
 loss_ad(m, x) = abs(sum(pure_evolve(m, x)))
@@ -95,6 +95,13 @@ function test_ux_dm_evolve(n::Int)
 	return maximum(abs.( dm_evolve(m, x) - mm * x * mm')) < 1.0e-6
 end
 
+function test_ux_dm_evolve_3(n::Int) 
+	m = UnitaryMatrix(n)
+	mm = Matrix(m)
+	x = randn(ComplexF64, n, n, 4)
+	@tensor tmp[1,5,4] := mm[1,2] * x[2,3,4] * conj(mm[5,3])
+	return maximum(abs.( dm_evolve(m, x) - tmp)) < 1.0e-6
+end
 
 function test_ux_dm_ad(n::Int) 
 	m = UnitaryMatrix(n)
@@ -109,12 +116,28 @@ function test_ux_dm_ad(n::Int)
 	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
 end
 
+function test_ux_dm_ad_3(n::Int) 
+	m = UnitaryMatrix(n)
+	x = randn(eltype(m), 2*n, 2*n)
+	x = x' + x
+	x = reshape(permutedims(reshape(x, n, 2, n, 2), (1,3,2,4)), n, n, 4)
+
+	loss_dm_fd(θs, y) = abs(sum(dm_evolve(UnitaryMatrix(θs, n), y)))
+
+	grad1 = Zygote.gradient(loss_dm_ad, m, x)
+	grad2 = fdm_gradient(loss_dm_fd, parameters(m), x)
+
+	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
+end
+
 @testset "unitary matrcies operations" begin
 	for n in (4, 5)
 		@test test_ux(n)
 		@test test_ux_ad(n)
 		@test test_ux_dm_evolve(n)
+		@test test_ux_dm_evolve_3(n)
 		@test test_ux_dm_ad(n)
+		@test test_ux_dm_ad_3(n)
 	end
 end
 
@@ -149,6 +172,13 @@ function test_ox_dm_evolve(n::Int)
 	return maximum(abs.( dm_evolve(m, x) - mm * x * mm')) < 1.0e-6
 end
 
+function test_ox_dm_evolve_3(n::Int) 
+	m = OrthogonalMatrix(n)
+	mm = Matrix(m)
+	x = randn(ComplexF64, n, n, 4)
+	@tensor tmp[1,5,4] := mm[1,2] * x[2,3,4] * conj(mm[5,3])
+	return maximum(abs.( dm_evolve(m, x) - tmp)) < 1.0e-6
+end
 
 function test_ox_dm_ad(n::Int) 
 	m = OrthogonalMatrix(n)
@@ -163,12 +193,28 @@ function test_ox_dm_ad(n::Int)
 	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
 end
 
+function test_ox_dm_ad_3(n::Int) 
+	m = OrthogonalMatrix(n)
+	x = randn(eltype(m), 2*n, 2*n)
+	x = x' + x
+	x = reshape(permutedims(reshape(x, n, 2, n, 2), (1,3,2,4)), n, n, 4)
+
+	loss_dm_fd(θs, y) = abs(sum(dm_evolve(OrthogonalMatrix(θs, n), y)))
+
+	grad1 = Zygote.gradient(loss_dm_ad, m, x)
+	grad2 = fdm_gradient(loss_dm_fd, parameters(m), x)
+
+	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
+end
+
 @testset "orthogonal matrcies operations" begin
 	for n in (4, 5)
 		@test test_ox(n)
 		@test test_ox_ad(n)
 		@test test_ox_dm_evolve(n)
+		@test test_ox_dm_evolve_3(n)
 		@test test_ox_dm_ad(n)
+		@test test_ox_dm_ad_3(n)
 	end
 end
 

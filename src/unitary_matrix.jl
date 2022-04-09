@@ -63,12 +63,12 @@ function pure_evolve_util(m::UnitaryMatrix, x::AbstractMatrix)
 end
 pure_evolve(m::UnitaryMatrix, x::AbstractMatrix) = pure_evolve_util(m, x)[1]
 
-function dm_evolve_util(m::UnitaryMatrix, x::AbstractMatrix)
+function dm_evolve_util(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	# rwork, cwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
 	rwork = Vector{real(T)}(undef, size(m, 1))
 	cwork = Vector{T}(undef, size(m, 1))
-	y = Matrix{T}(x)
+	y = Array{T}(x)
 	for r in m.rotations
 		y = _rxrd_cpx!(r.θs, y, y, r.start_pos, rwork, cwork)
 	end
@@ -78,7 +78,7 @@ function dm_evolve_util(m::UnitaryMatrix, x::AbstractMatrix)
 	dm_apply_diagonals!(cwork, y, y)
 	return y, rwork, cwork	
 end
-dm_evolve(m::UnitaryMatrix, x::AbstractMatrix) = dm_evolve_util(m, x)[1]
+dm_evolve(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = dm_evolve_util(m, x)[1]
 
 
 Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractMatrix) = begin
@@ -90,7 +90,7 @@ Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractMatrix) = begin
 	end
 end
 
-Zygote.@adjoint dm_evolve(m::UnitaryMatrix, x::AbstractMatrix) = begin
+Zygote.@adjoint dm_evolve(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = begin
 	y, rwork, cwork = dm_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
@@ -118,7 +118,7 @@ function pure_back_propagate(Δ::AbstractMatrix, m::UnitaryMatrix, y::AbstractMa
 	return Δ, ∇θs_all, y
 end
 
-function dm_back_propagate(Δ::AbstractMatrix, m::UnitaryMatrix, y::AbstractMatrix, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function dm_back_propagate(Δ::Union{AbstractMatrix, AbstractArray{<:Number, 3}}, m::UnitaryMatrix, y::Union{AbstractMatrix, AbstractArray{<:Number, 3}}, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	RT = real(eltype(m))
 	∇θs = Vector{RT}[]
 	Δ = convert(typeof(y), Δ)

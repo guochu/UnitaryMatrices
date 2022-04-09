@@ -73,22 +73,22 @@ Zygote.@adjoint pure_evolve(m::RotationMatrix{<:Complex}, x::AbstractMatrix) = b
 	end
 end
 
-function dm_evolve_util(m::RotationMatrix{<:Real}, x::AbstractMatrix)
+function dm_evolve_util(m::RotationMatrix{<:Real}, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	rwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
-	y = _rxrd_real!(m.θs, x, Matrix{T}(x), m.start_pos, rwork)
+	y = _rxrd_real!(m.θs, x, Array{T}(x), m.start_pos, rwork)
 	return y, rwork
 end
 
-function dm_evolve_util(m::RotationMatrix{<:Complex}, x::AbstractMatrix)
+function dm_evolve_util(m::RotationMatrix{<:Complex}, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	rwork, cwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
-	y = _rxrd_cpx!(m.θs, x, Matrix{T}(x), m.start_pos, rwork, cwork)
+	y = _rxrd_cpx!(m.θs, x, Array{T}(x), m.start_pos, rwork, cwork)
 	return y, rwork, cwork
 end
-dm_evolve(m::RotationMatrix, x::AbstractMatrix) = dm_evolve_util(m, x)[1]
+dm_evolve(m::RotationMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = dm_evolve_util(m, x)[1]
 
-Zygote.@adjoint dm_evolve(m::RotationMatrix{<:Real}, x::AbstractMatrix) = begin
+Zygote.@adjoint dm_evolve(m::RotationMatrix{<:Real}, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = begin
 	y, rwork = dm_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork = compute_workspace(m)
@@ -97,7 +97,7 @@ Zygote.@adjoint dm_evolve(m::RotationMatrix{<:Real}, x::AbstractMatrix) = begin
 	end
 end
 
-Zygote.@adjoint dm_evolve(m::RotationMatrix{<:Complex}, x::AbstractMatrix) = begin
+Zygote.@adjoint dm_evolve(m::RotationMatrix{<:Complex}, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = begin
 	y, rwork, cwork = dm_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
@@ -120,8 +120,16 @@ function dm_back_propagate(Δ::AbstractMatrix, m::RotationMatrix{<:Real}, y::Abs
 	∇θ, Δ = _∇rxrd_real!(Δ, m.θs, y, m.start_pos, rwork)
 	return Δ, ∇θ, y
 end
+function dm_back_propagate(Δ::AbstractArray{<:Number, 3}, m::RotationMatrix{<:Real}, y::AbstractArray{<:Number, 3}, rwork::Vector{<:Real})
+	∇θ, Δ = _∇rxrd_real!(Δ, m.θs, y, m.start_pos, rwork)
+	return Δ, ∇θ, y
+end
 
 function dm_back_propagate(Δ::AbstractMatrix, m::RotationMatrix{<:Complex}, y::AbstractMatrix, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	∇θ, Δ = _∇rxrd_cpx!(Δ, m.θs, y, m.start_pos, rwork, cwork)
+	return Δ, ∇θ, y
+end
+function dm_back_propagate(Δ::AbstractArray{<:Number, 3}, m::RotationMatrix{<:Complex}, y::AbstractArray{<:Number, 3}, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	∇θ, Δ = _∇rxrd_cpx!(Δ, m.θs, y, m.start_pos, rwork, cwork)
 	return Δ, ∇θ, y
 end
@@ -201,15 +209,21 @@ function _rx_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwo
 	return y
 end
 
-
-function _rxrd_real!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+function init_rwork!(θs, rwork::Vector{<:Real})
 	L = length(θs)
+	@assert length(rwork) >= 2*L
 	rwork2 = view(rwork, L+1:2*L)
 	@inbounds for i in 1:L
 		sintheta, costheta = sincos(θs[i])
 		rwork[i] = sintheta
 		rwork2[i] = costheta
-	end
+	end	
+end
+
+
+function _rxrd_real_util!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+	L = length(θs)
+	rwork2 = view(rwork, L+1:2*L)
 
 	for j in 1:size(x, 2)
 		@inbounds for i in 1:L
@@ -230,7 +244,24 @@ function _rxrd_real!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, 
 	return y
 end
 
-function _rxrd_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function _rxrd_real!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+	init_rwork!(θs, rwork)
+	return _rxrd_real_util!(θs, x, y, start_pos, rwork)
+end
+
+"""
+	The first two dimensions of y correspond to a sub-density matrix
+"""
+function _rxrd_real!(θs, x::AbstractArray{<:Number, 3}, y::AbstractArray{<:Number, 3}, start_pos::Int, rwork::Vector{<:Real})
+	init_rwork!(θs, rwork)
+	for k in 1:size(x, 3)
+		_rxrd_real_util!(θs, view(x, :, :, k), view(y, :, :, k), start_pos, rwork)
+	end
+	return y
+end
+
+
+function init_cwork!(θs, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	L = div(length(θs), 2)
 	@assert length(rwork) >= 2*L
 	@assert length(cwork) >= L
@@ -241,6 +272,11 @@ function _rxrd_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, r
 		rwork[i] = sintheta
 		rwork2[i] = costheta
 	end
+end
+
+function _rxrd_cpx_util!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	L = div(length(θs), 2)
+	rwork2 = view(rwork, L+1:2*L)
 
 	for j in 1:size(x, 2)
 		@inbounds for i in 1:L
@@ -261,20 +297,25 @@ function _rxrd_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, r
 	return y
 end
 
-"""
-	_∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
-	y = Ux, Δ is the gradient from the previous layer
-"""
-function _∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+function _rxrd_cpx!(θs, x::AbstractMatrix, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	init_cwork!(θs, rwork, cwork)
+	return _rxrd_cpx_util!(θs, x, y, start_pos, rwork, cwork)
+end
+function _rxrd_cpx!(θs, x::AbstractArray{<:Number, 3}, y::AbstractArray{<:Number, 3}, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	init_cwork!(θs, rwork, cwork)
+	for k in 1:size(x, 3)
+		_rxrd_cpx_util!(θs, view(x, :, :, k), view(y,:,:,k), start_pos, rwork, cwork)
+	end
+	return y
+end
+
+
+function _∇rx_real_util!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, ∇θ)
 	L = length(θs)
 	rwork2 = view(rwork, L+1:2*L)
-	@inbounds for i in 1:L
-		sintheta, costheta = sincos(θs[i])
-		rwork[i] = sintheta
-		rwork2[i] = costheta
-	end
-	Δ = convert(typeof(y), Δ)
-	∇θ = zero(θs)
+
+	# Δ = convert(typeof(y), Δ)
+	# ∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		@inbounds for i in 1:L
 			sintheta, costheta = -rwork[i], rwork2[i]
@@ -293,20 +334,21 @@ function _∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int
 end
 
 """
-	_∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	_∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	y = Ux, Δ is the gradient from the previous layer
 """
-function _∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function _∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+	init_rwork!(θs, rwork)
+	Δ = convert(typeof(y), Δ)
+	return _∇rx_real_util!(Δ, θs, y, start_pos, rwork, zero(θs))
+end
+
+function _∇rx_cpx_util!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex}, ∇θ)
 	L = div(length(θs), 2)
 	rwork2 = view(rwork, L+1:2*L)
-	@inbounds for i in 1:L
-		cwork[i] = exp(im*θs[L+i])
-		sintheta, costheta = sincos(θs[i])
-		rwork[i] = sintheta
-		rwork2[i] = costheta
-	end
-	Δ = convert(typeof(y), Δ)
-	∇θ = zero(θs)
+
+	# Δ = convert(typeof(y), Δ)
+	# ∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		@inbounds for i in 1:L
 			phase, sintheta, costheta = cwork[i], rwork[i], rwork2[i]
@@ -326,22 +368,23 @@ function _∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int,
 	return ∇θ, Δ
 end
 
-
-
 """
-	_∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+	_∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	y = Ux, Δ is the gradient from the previous layer
 """
-function _∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+function _∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	init_cwork!(θs, rwork, cwork)
+	Δ = convert(typeof(y), Δ)
+	return _∇rx_cpx_util!(Δ, θs, y, start_pos, rwork, cwork, zero(θs))
+end
+
+
+function _∇rxrd_real_util!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, ∇θ)
 	L = length(θs)
 	rwork2 = view(rwork, L+1:2*L)
-	@inbounds for i in 1:L
-		sintheta, costheta = sincos(θs[i])
-		rwork[i] = sintheta
-		rwork2[i] = costheta
-	end
-	Δ = convert(typeof(y), Δ)
-	∇θ = zero(θs)
+
+	# Δ = convert(typeof(y), Δ)
+	# ∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		@inbounds for i in 1:L
 			sintheta, costheta = -rwork[i], rwork2[i]
@@ -375,21 +418,32 @@ function _∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::I
 	return ∇θ, Δ
 end
 
+
 """
-	_∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	_∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	y = Ux, Δ is the gradient from the previous layer
 """
-function _∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
-	L = div(length(θs), 2)
-	rwork2 = view(rwork, L+1:2*L)
-	@inbounds for i in 1:L
-		cwork[i] = exp(im*θs[L+i])
-		sintheta, costheta = sincos(θs[i])
-		rwork[i] = sintheta
-		rwork2[i] = costheta
-	end
+function _∇rxrd_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
+	init_rwork!(θs, rwork)
+	Δ = convert(typeof(y), Δ)
+	return _∇rxrd_real_util!(Δ, θs, y, start_pos, rwork, zero(θs))
+end
+function _∇rxrd_real!(Δ::AbstractArray{<:Number, 3}, θs, y::AbstractArray{<:Number, 3}, start_pos::Int, rwork::Vector{<:Real})
+	init_rwork!(θs, rwork)
 	Δ = convert(typeof(y), Δ)
 	∇θ = zero(θs)
+	for k in 1:size(y, 3)
+		_∇rxrd_real_util!(view(Δ, :, :, k), θs, view(y, :, :, k), start_pos, rwork, ∇θ)
+	end
+	return ∇θ, Δ
+end
+
+function _∇rxrd_cpx_util!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex}, ∇θ)
+	L = div(length(θs), 2)
+	rwork2 = view(rwork, L+1:2*L)
+
+	# Δ = convert(typeof(y), Δ)
+	# ∇θ = zero(θs)
 	for j in 1:size(y, 2)
 		@inbounds for i in 1:L
 			phase, sintheta, costheta = cwork[i], -rwork[i], rwork2[i]
@@ -426,6 +480,26 @@ function _∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::In
 			∇θ[i] += 2*a 
 			∇θ[L+i] += 2*b			
 		end
+	end
+	return ∇θ, Δ
+end
+
+"""
+	_∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	y = Ux, Δ is the gradient from the previous layer
+"""
+function _∇rxrd_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	init_cwork!(θs, rwork, cwork)
+	Δ = convert(typeof(y), Δ)
+	return _∇rxrd_cpx_util!(Δ,θs, y, start_pos, rwork, cwork, zero(θs))
+end
+
+function _∇rxrd_cpx!(Δ::AbstractArray{<:Number, 3}, θs, y::AbstractArray{<:Number, 3}, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+	init_cwork!(θs, rwork, cwork)
+	Δ = convert(typeof(y), Δ)
+	∇θ = zero(θs)
+	for k in 1:size(y, 3)
+		_∇rxrd_cpx_util!(view(Δ,:,:,k),θs, view(y,:,:,k), start_pos, rwork, cwork, ∇θ)
 	end
 	return ∇θ, Δ
 end
