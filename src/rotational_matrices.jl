@@ -39,6 +39,7 @@ Base.size(x::RotationMatrix, i::Int) = (@assert ((i==1) || (i==2)); x.n)
 Base.Matrix(m::RotationMatrix) = pure_evolve(m, Matrix(LinearAlgebra.I, size(m)))
 
 parameters(m::RotationMatrix) = m.θs
+nparameters(m::RotationMatrix) = length(parameters(m))
 
 function pure_evolve_util(m::RotationMatrix{<:Real}, x::AbstractMatrix)
 	rwork = compute_workspace(m)

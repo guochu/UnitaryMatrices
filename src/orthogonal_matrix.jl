@@ -38,7 +38,7 @@ function parameters(m::OrthogonalMatrix)
 	end
 	return paras
 end
-
+nparameters(m::OrthogonalMatrix) = div(m.n*(m.n-1), 2)
 nrotations(m::OrthogonalMatrix) = length(m.rotations)
 
 

@@ -43,6 +43,7 @@ function parameters(m::UnitaryMatrix)
 	append!(paras, m.diagonals)
 	return paras
 end
+nparameters(m::UnitaryMatrix) = (length(m.diagonals))^2
 
 nrotations(m::UnitaryMatrix) = length(m.rotations)
 

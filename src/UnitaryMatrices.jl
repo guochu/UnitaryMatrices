@@ -5,7 +5,7 @@ using Zygote
 using LinearAlgebra
 
 export RotationMatrix, pure_evolve, dm_evolve
-export UnitaryMatrix, OrthogonalMatrix, parameters
+export UnitaryMatrix, OrthogonalMatrix, parameters, nparameters
 
 # defnition of rotational matrices
 include("rotational_matrices.jl")
