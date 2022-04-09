@@ -64,6 +64,7 @@ function dm_evolve_util(m::OrthogonalMatrix, x::Union{AbstractMatrix, AbstractAr
 end
 dm_evolve(m::OrthogonalMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = dm_evolve_util(m, x)[1]
 
+Zygote.@adjoint OrthogonalMatrix(θs::Vector{<:Real}, n::Int) = OrthogonalMatrix(θs, n), z -> (z, nothing)
 
 Zygote.@adjoint pure_evolve(m::OrthogonalMatrix, x::AbstractMatrix) = begin
 	y, rwork = pure_evolve_util(m, x)
@@ -111,13 +112,5 @@ function dm_back_propagate(Δ::Union{AbstractMatrix, AbstractArray{<:Number, 3}}
 	end
 	return Δ, ∇θs_all, y
 end
-
-
-
-
-
-
-
-
 
 
