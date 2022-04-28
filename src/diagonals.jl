@@ -1,6 +1,6 @@
 
 
-function pure_diagonal_back_propagate(Δ::AbstractMatrix, Ds::Vector{<:Real}, y::AbstractMatrix, cwork::Vector{<:Complex})
+function pure_diagonal_back_propagate(Δ::AbstractMatVec, Ds::Vector{<:Real}, y::AbstractMatVec, cwork::Vector{<:Complex})
 	∇Ds, Δ = ∇pure_apply_diagonals!(Δ, Ds, y, cwork)
 	return Δ, ∇Ds, y
 end
@@ -16,7 +16,7 @@ end
 
 
 
-function pure_apply_diagonals!(Ds::Vector{<:Complex}, x::AbstractMatrix, y::AbstractMatrix)
+function pure_apply_diagonals!(Ds::Vector{<:Complex}, x::AbstractMatVec, y::AbstractMatVec)
 	# @assert length(Ds) == size(x, 1)
 	for j in 1:size(x, 2)
 		for i in 1:size(x, 1)
@@ -51,7 +51,7 @@ function init_diagonal_cwork!(Ds, cwork::Vector{<:Complex})
 	end
 end
 
-function ∇pure_apply_diagonals_util!(Δ::AbstractMatrix, Ds::Vector{<:Real}, y::AbstractMatrix, cwork::Vector{<:Complex})
+function ∇pure_apply_diagonals_util!(Δ::AbstractMatVec, Ds::Vector{<:Real}, y::AbstractMatVec, cwork::Vector{<:Complex})
 	L = length(Ds)
 	Δ = convert(typeof(y), Δ)
 	pure_apply_diagonals!(cwork, y, y)
@@ -64,7 +64,7 @@ function ∇pure_apply_diagonals_util!(Δ::AbstractMatrix, Ds::Vector{<:Real}, y
 	end
 	return ∇Ds, Δ
 end
-function ∇pure_apply_diagonals!(Δ::AbstractMatrix, Ds::Vector{<:Real}, y::AbstractMatrix, cwork::Vector{<:Complex})
+function ∇pure_apply_diagonals!(Δ::AbstractMatVec, Ds::Vector{<:Real}, y::AbstractMatVec, cwork::Vector{<:Complex})
 	init_diagonal_cwork!(Ds, cwork)
 	return ∇pure_apply_diagonals_util!(Δ, Ds, y, cwork)
 end

@@ -31,6 +31,8 @@ Base.size(x::OrthogonalMatrix) = (x.n, x.n)
 Base.size(x::OrthogonalMatrix, i::Int) = (@assert ((i==1) || (i==2)); x.n)
 Base.Matrix(m::OrthogonalMatrix) = pure_evolve(m, Matrix(LinearAlgebra.I, size(m)))
 
+Base.:*(m::OrthogonalMatrix, x::AbstractMatVec) = pure_evolve(m, x)
+
 function parameters(m::OrthogonalMatrix)
 	paras = eltype(m)[]
 	for r in m.rotations
@@ -42,16 +44,16 @@ nparameters(m::OrthogonalMatrix) = div(m.n*(m.n-1), 2)
 nrotations(m::OrthogonalMatrix) = length(m.rotations)
 
 
-function pure_evolve_util(m::OrthogonalMatrix, x::AbstractMatrix)
+function pure_evolve_util(m::OrthogonalMatrix, x::AbstractMatVec)
 	T = promote_type(eltype(m), eltype(x))
 	rwork = Vector{real(T)}(undef, size(m, 1))
-	y = Matrix{T}(x)
+	y = _typed_copy(T, x) 
 	for r in m.rotations
 		y = _rx_real!(r.θs, y, y, r.start_pos, rwork)
 	end
 	return y, rwork
 end
-pure_evolve(m::OrthogonalMatrix, x::AbstractMatrix) = pure_evolve_util(m, x)[1]
+pure_evolve(m::OrthogonalMatrix, x::AbstractMatVec) = pure_evolve_util(m, x)[1]
 
 function dm_evolve_util(m::OrthogonalMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	T = promote_type(eltype(m), eltype(x))
@@ -66,7 +68,7 @@ dm_evolve(m::OrthogonalMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 
 
 Zygote.@adjoint OrthogonalMatrix(θs::Vector{<:Real}, n::Int) = OrthogonalMatrix(θs, n), z -> (z, nothing)
 
-Zygote.@adjoint pure_evolve(m::OrthogonalMatrix, x::AbstractMatrix) = begin
+Zygote.@adjoint pure_evolve(m::OrthogonalMatrix, x::AbstractMatVec) = begin
 	y, rwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		Δ, ∇θ, x1 = pure_back_propagate(Δ, m, copy(y), rwork)
@@ -83,7 +85,7 @@ Zygote.@adjoint dm_evolve(m::OrthogonalMatrix, x::Union{AbstractMatrix, Abstract
 end
 
 
-function pure_back_propagate(Δ::AbstractMatrix, m::OrthogonalMatrix, y::AbstractMatrix, rwork::Vector{<:Real})
+function pure_back_propagate(Δ::AbstractMatVec, m::OrthogonalMatrix, y::AbstractMatVec, rwork::Vector{<:Real})
 	RT = real(eltype(m))
 	∇θs = Vector{RT}[]
 	Δ = convert(typeof(y), Δ)

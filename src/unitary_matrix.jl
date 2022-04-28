@@ -35,6 +35,8 @@ Base.size(x::UnitaryMatrix) = (length(x.diagonals), length(x.diagonals))
 Base.size(x::UnitaryMatrix, i::Int) = (@assert ((i==1) || (i==2)); length(x.diagonals))
 Base.Matrix(m::UnitaryMatrix) = pure_evolve(m, Matrix(LinearAlgebra.I, size(m)))
 
+Base.:*(m::UnitaryMatrix, x::AbstractMatVec) = pure_evolve(m, x)
+
 function parameters(m::UnitaryMatrix)
 	paras = real(eltype(m))[]
 	for r in m.rotations
@@ -47,12 +49,12 @@ nparameters(m::UnitaryMatrix) = (length(m.diagonals))^2
 
 nrotations(m::UnitaryMatrix) = length(m.rotations)
 
-function pure_evolve_util(m::UnitaryMatrix, x::AbstractMatrix)
+function pure_evolve_util(m::UnitaryMatrix, x::AbstractMatVec)
 	# rwork, cwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
 	rwork = Vector{real(T)}(undef, size(m, 1))
 	cwork = Vector{T}(undef, size(m, 1))
-	y = Matrix{T}(x)
+	y = _typed_copy(T, x)
 	for r in m.rotations
 		y = _rx_cpx!(r.θs, y, y, r.start_pos, rwork, cwork)
 	end
@@ -62,7 +64,7 @@ function pure_evolve_util(m::UnitaryMatrix, x::AbstractMatrix)
 	pure_apply_diagonals!(cwork, y, y)
 	return y, rwork, cwork
 end
-pure_evolve(m::UnitaryMatrix, x::AbstractMatrix) = pure_evolve_util(m, x)[1]
+pure_evolve(m::UnitaryMatrix, x::AbstractMatVec) = pure_evolve_util(m, x)[1]
 
 function dm_evolve_util(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	# rwork, cwork = compute_workspace(m)
@@ -83,7 +85,7 @@ dm_evolve(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}
 
 Zygote.@adjoint UnitaryMatrix(θs::Vector{<:Real}, n::Int) = UnitaryMatrix(θs, n), z -> (z, nothing)
 
-Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractMatrix) = begin
+Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractMatVec) = begin
 	y, rwork, cwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
@@ -103,7 +105,7 @@ end
 
 
 
-function pure_back_propagate(Δ::AbstractMatrix, m::UnitaryMatrix, y::AbstractMatrix, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function pure_back_propagate(Δ::AbstractMatVec, m::UnitaryMatrix, y::AbstractMatVec, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	RT = real(eltype(m))
 	∇θs = Vector{RT}[]
 	Δ = convert(typeof(y), Δ)

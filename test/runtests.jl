@@ -11,7 +11,14 @@ loss_dm_ad(m, x) = abs(sum(dm_evolve(m, x)))
 
 println("-----------test rotational matrcies-----------------")
 
-function test_rx(::Type{T}, n::Int, start_pos::Int) where {T<:Number}
+function test_rx1(::Type{T}, n::Int, start_pos::Int) where {T<:Number}
+	m = RotationMatrix{T}(n, start_pos)
+	mm = Matrix(m)
+	x = randn(ComplexF64, n)
+	return maximum(abs.(pure_evolve(m, x) - mm * x)) < 1.0e-6
+end
+
+function test_rx2(::Type{T}, n::Int, start_pos::Int) where {T<:Number}
 	m = RotationMatrix{T}(n, start_pos)
 	mm = Matrix(m)
 	x = randn(ComplexF64, n, 3)
@@ -57,7 +64,8 @@ end
 @testset "rotational matrcies operations" begin
 	for T in (Float64, ComplexF64)
 		for start_pos in (0, 1)
-			@test test_rx(T, 5, start_pos)
+			@test test_rx1(T, 5, start_pos)
+			@test test_rx2(T, 5, start_pos)
 			@test test_rx_ad(T, 5, start_pos)
 			@test test_rx_dm_evolve(T, 5, start_pos)
 			@test test_rx_dm_ad(T, 5, start_pos)
@@ -67,15 +75,34 @@ end
 
 println("-----------test unitary matrcies-----------------")
 
+function test_ux1(n::Int)
+	m = UnitaryMatrix(n)
+	mm = Matrix(m)
+	x = randn(ComplexF64, n)
+	return maximum(abs.(pure_evolve(m, x) - mm * x)) < 1.0e-6
+end
 
-function test_ux(n::Int)
+function test_ux2(n::Int)
 	m = UnitaryMatrix(n)
 	mm = Matrix(m)
 	x = randn(ComplexF64, n, 3)
 	return maximum(abs.(pure_evolve(m, x) - mm * x)) < 1.0e-6
 end
 
-function test_ux_ad(n::Int) 
+function test_ux_ad1(n::Int) 
+	m = UnitaryMatrix(n)
+	x = randn(eltype(m), n)
+
+	loss_fd(θs, y) = abs(sum(pure_evolve(UnitaryMatrix(θs, n), y)))
+
+	grad1 = Zygote.gradient(loss_ad, m, x)
+	grad2 = fdm_gradient(loss_fd, parameters(m), x)
+
+	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
+	# return grad1, grad2
+end
+
+function test_ux_ad2(n::Int) 
 	m = UnitaryMatrix(n)
 	x = randn(eltype(m), n, 3)
 
@@ -132,8 +159,10 @@ end
 
 @testset "unitary matrcies operations" begin
 	for n in (4, 5)
-		@test test_ux(n)
-		@test test_ux_ad(n)
+		@test test_ux1(n)
+		@test test_ux2(n)
+		@test test_ux_ad1(n)
+		@test test_ux_ad2(n)
 		@test test_ux_dm_evolve(n)
 		@test test_ux_dm_evolve_3(n)
 		@test test_ux_dm_ad(n)
@@ -145,14 +174,34 @@ end
 println("-----------test orthogonal matrcies-----------------")
 
 
-function test_ox(n::Int)
+function test_ox1(n::Int)
+	m = OrthogonalMatrix(n)
+	mm = Matrix(m)
+	x = randn(ComplexF64, n)
+	return maximum(abs.(pure_evolve(m, x) - mm * x)) < 1.0e-6
+end
+
+function test_ox2(n::Int)
 	m = OrthogonalMatrix(n)
 	mm = Matrix(m)
 	x = randn(ComplexF64, n, 3)
 	return maximum(abs.(pure_evolve(m, x) - mm * x)) < 1.0e-6
 end
 
-function test_ox_ad(n::Int) 
+function test_ox_ad1(n::Int) 
+	m = OrthogonalMatrix(n)
+	x = randn(eltype(m), n)
+
+	loss_fd(θs, y) = abs(sum(pure_evolve(OrthogonalMatrix(θs, n), y)))
+
+	grad1 = Zygote.gradient(loss_ad, m, x)
+	grad2 = fdm_gradient(loss_fd, parameters(m), x)
+
+	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
+	# return grad1, grad2
+end
+
+function test_ox_ad2(n::Int) 
 	m = OrthogonalMatrix(n)
 	x = randn(eltype(m), n, 3)
 
@@ -209,8 +258,10 @@ end
 
 @testset "orthogonal matrcies operations" begin
 	for n in (4, 5)
-		@test test_ox(n)
-		@test test_ox_ad(n)
+		@test test_ox1(n)
+		@test test_ox2(n)
+		@test test_ox_ad1(n)
+		@test test_ox_ad2(n)
 		@test test_ox_dm_evolve(n)
 		@test test_ox_dm_evolve_3(n)
 		@test test_ox_dm_ad(n)

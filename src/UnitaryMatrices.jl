@@ -7,6 +7,9 @@ using LinearAlgebra
 export RotationMatrix, pure_evolve, dm_evolve
 export UnitaryMatrix, OrthogonalMatrix, parameters, nparameters
 
+
+const AbstractMatVec = Union{AbstractMatrix, AbstractVector}
+
 # defnition of rotational matrices
 include("rotational_matrices.jl")
 include("diagonals.jl")
