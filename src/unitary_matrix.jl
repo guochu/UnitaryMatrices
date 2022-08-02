@@ -86,6 +86,16 @@ function dm_evolve_util(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray
 end
 dm_evolve(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}) = dm_evolve_util(m, x)[1]
 
+Zygote.@adjoint Base.Matrix(m::AbstractUnitaryMatrix) = begin
+	iden = Matrix(LinearAlgebra.I, size(m))
+	y, back = Zygote.pullback(pure_evolve, m, iden)
+	return y, z -> begin
+		a, b = back(z)
+		return (a,)
+	end
+end
+
+
 Zygote.@adjoint UnitaryMatrix(θs::Vector{<:Real}, n::Int) = UnitaryMatrix(θs, n), z -> (z, nothing)
 
 Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractVecOrMat) = begin

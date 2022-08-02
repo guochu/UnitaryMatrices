@@ -157,6 +157,19 @@ function test_ux_dm_ad_3(n::Int)
 	return max( maximum(abs.(grad1[1] - grad2[1])), maximum(abs.(grad1[2] - grad2[2])) ) < 1.0e-6
 end
 
+function test_u_mat(n::Int)
+	m = UnitaryMatrix(n)
+	x = randn(eltype(m), n, n)
+
+	loss(dm) = abs(sum(Matrix(dm) * x))
+	loss_dm_fd(θs) = loss(UnitaryMatrix(θs, n))
+
+	grad1 = Zygote.gradient(loss, m)[1]
+	grad2 = fdm_gradient(loss_dm_fd, parameters(m))
+
+	return maximum(abs.(grad1 - grad2)) < 1.0e-6
+end
+
 @testset "unitary matrcies operations" begin
 	for n in (4, 5)
 		@test test_ux1(n)
@@ -167,6 +180,7 @@ end
 		@test test_ux_dm_evolve_3(n)
 		@test test_ux_dm_ad(n)
 		@test test_ux_dm_ad_3(n)
+		@test test_u_mat(n)
 	end
 end
 
