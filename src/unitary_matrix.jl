@@ -1,7 +1,7 @@
 
 
 
-struct UnitaryMatrix{T <: Complex, RT <: Real} <: AbstractMatrix{T}
+struct UnitaryMatrix{T <: Complex, RT <: Real} <: AbstractUnitaryMatrix{T}
 	rotations::Vector{RotationMatrix{T, RT}}
 	diagonals::Vector{RT}
 end
@@ -34,8 +34,11 @@ UnitaryMatrix(n::Int) = UnitaryMatrix(Float64, n)
 Base.size(x::UnitaryMatrix) = (length(x.diagonals), length(x.diagonals))
 Base.size(x::UnitaryMatrix, i::Int) = (@assert ((i==1) || (i==2)); length(x.diagonals))
 Base.Matrix(m::UnitaryMatrix) = pure_evolve(m, Matrix(LinearAlgebra.I, size(m)))
+Base.eltype(::Type{UnitaryMatrix{T, RT}}) where {T, RT} = T
+Base.eltype(m::UnitaryMatrix) = eltype(typeof(m))
 
-Base.:*(m::UnitaryMatrix, x::AbstractMatVec) = pure_evolve(m, x)
+
+Base.:*(m::UnitaryMatrix, x::AbstractVecOrMat) = pure_evolve(m, x)
 
 function parameters(m::UnitaryMatrix)
 	paras = real(eltype(m))[]
@@ -49,7 +52,7 @@ nparameters(m::UnitaryMatrix) = (length(m.diagonals))^2
 
 nrotations(m::UnitaryMatrix) = length(m.rotations)
 
-function pure_evolve_util(m::UnitaryMatrix, x::AbstractMatVec)
+function pure_evolve_util(m::UnitaryMatrix, x::AbstractVecOrMat)
 	# rwork, cwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
 	rwork = Vector{real(T)}(undef, size(m, 1))
@@ -64,7 +67,7 @@ function pure_evolve_util(m::UnitaryMatrix, x::AbstractMatVec)
 	pure_apply_diagonals!(cwork, y, y)
 	return y, rwork, cwork
 end
-pure_evolve(m::UnitaryMatrix, x::AbstractMatVec) = pure_evolve_util(m, x)[1]
+pure_evolve(m::UnitaryMatrix, x::AbstractVecOrMat) = pure_evolve_util(m, x)[1]
 
 function dm_evolve_util(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	# rwork, cwork = compute_workspace(m)
@@ -85,7 +88,7 @@ dm_evolve(m::UnitaryMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}}
 
 Zygote.@adjoint UnitaryMatrix(θs::Vector{<:Real}, n::Int) = UnitaryMatrix(θs, n), z -> (z, nothing)
 
-Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractMatVec) = begin
+Zygote.@adjoint pure_evolve(m::UnitaryMatrix, x::AbstractVecOrMat) = begin
 	y, rwork, cwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
@@ -105,7 +108,7 @@ end
 
 
 
-function pure_back_propagate(Δ::AbstractMatVec, m::UnitaryMatrix, y::AbstractMatVec, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function pure_back_propagate(Δ::AbstractVecOrMat, m::UnitaryMatrix, y::AbstractVecOrMat, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	RT = real(eltype(m))
 	∇θs = Vector{RT}[]
 	Δ = convert(typeof(y), Δ)

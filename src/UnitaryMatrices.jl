@@ -8,7 +8,9 @@ export RotationMatrix, pure_evolve, dm_evolve
 export UnitaryMatrix, OrthogonalMatrix, parameters, nparameters
 
 
-const AbstractMatVec = Union{AbstractMatrix, AbstractVector}
+# const AbstractMatVec = Union{AbstractMatrix, AbstractVector}
+
+abstract type AbstractUnitaryMatrix{T} end
 
 # defnition of rotational matrices
 include("rotational_matrices.jl")

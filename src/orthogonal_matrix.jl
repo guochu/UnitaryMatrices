@@ -1,6 +1,6 @@
 
 
-struct OrthogonalMatrix{T <: Real} <: AbstractMatrix{T}
+struct OrthogonalMatrix{T <: Real} <: AbstractUnitaryMatrix{T}
 	rotations::Vector{RotationMatrix{T, T}}
 	n::Int
 end
@@ -30,8 +30,11 @@ OrthogonalMatrix(n::Int) = OrthogonalMatrix(Float64, n)
 Base.size(x::OrthogonalMatrix) = (x.n, x.n)
 Base.size(x::OrthogonalMatrix, i::Int) = (@assert ((i==1) || (i==2)); x.n)
 Base.Matrix(m::OrthogonalMatrix) = pure_evolve(m, Matrix(LinearAlgebra.I, size(m)))
+Base.eltype(::Type{OrthogonalMatrix{T}}) where {T} = T
+Base.eltype(m::OrthogonalMatrix) = eltype(typeof(m))
 
-Base.:*(m::OrthogonalMatrix, x::AbstractMatVec) = pure_evolve(m, x)
+
+Base.:*(m::OrthogonalMatrix, x::AbstractVecOrMat) = pure_evolve(m, x)
 
 function parameters(m::OrthogonalMatrix)
 	paras = eltype(m)[]
@@ -44,7 +47,7 @@ nparameters(m::OrthogonalMatrix) = div(m.n*(m.n-1), 2)
 nrotations(m::OrthogonalMatrix) = length(m.rotations)
 
 
-function pure_evolve_util(m::OrthogonalMatrix, x::AbstractMatVec)
+function pure_evolve_util(m::OrthogonalMatrix, x::AbstractVecOrMat)
 	T = promote_type(eltype(m), eltype(x))
 	rwork = Vector{real(T)}(undef, size(m, 1))
 	y = _typed_copy(T, x) 
@@ -53,7 +56,7 @@ function pure_evolve_util(m::OrthogonalMatrix, x::AbstractMatVec)
 	end
 	return y, rwork
 end
-pure_evolve(m::OrthogonalMatrix, x::AbstractMatVec) = pure_evolve_util(m, x)[1]
+pure_evolve(m::OrthogonalMatrix, x::AbstractVecOrMat) = pure_evolve_util(m, x)[1]
 
 function dm_evolve_util(m::OrthogonalMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 3}})
 	T = promote_type(eltype(m), eltype(x))
@@ -68,7 +71,7 @@ dm_evolve(m::OrthogonalMatrix, x::Union{AbstractMatrix, AbstractArray{<:Number, 
 
 Zygote.@adjoint OrthogonalMatrix(θs::Vector{<:Real}, n::Int) = OrthogonalMatrix(θs, n), z -> (z, nothing)
 
-Zygote.@adjoint pure_evolve(m::OrthogonalMatrix, x::AbstractMatVec) = begin
+Zygote.@adjoint pure_evolve(m::OrthogonalMatrix, x::AbstractVecOrMat) = begin
 	y, rwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		Δ, ∇θ, x1 = pure_back_propagate(Δ, m, copy(y), rwork)
@@ -85,7 +88,7 @@ Zygote.@adjoint dm_evolve(m::OrthogonalMatrix, x::Union{AbstractMatrix, Abstract
 end
 
 
-function pure_back_propagate(Δ::AbstractMatVec, m::OrthogonalMatrix, y::AbstractMatVec, rwork::Vector{<:Real})
+function pure_back_propagate(Δ::AbstractVecOrMat, m::OrthogonalMatrix, y::AbstractVecOrMat, rwork::Vector{<:Real})
 	RT = real(eltype(m))
 	∇θs = Vector{RT}[]
 	Δ = convert(typeof(y), Δ)

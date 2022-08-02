@@ -7,7 +7,7 @@
 	n : matrix size
 	start_pos is 0 or 1
 """
-struct RotationMatrix{T, RT} <: AbstractMatrix{T}
+struct RotationMatrix{T, RT} 
 	θs::Vector{RT}
 	# ϕs::Vector{RT}
 	n::Int
@@ -37,27 +37,29 @@ end
 Base.size(x::RotationMatrix) = (x.n, x.n)
 Base.size(x::RotationMatrix, i::Int) = (@assert ((i==1) || (i==2)); x.n)
 Base.Matrix(m::RotationMatrix) = pure_evolve(m, Matrix(LinearAlgebra.I, size(m)))
+Base.eltype(::Type{RotationMatrix{T, RT}}) where {T, RT} = T
+Base.eltype(m::RotationMatrix) = eltype(typeof(m))
 
 parameters(m::RotationMatrix) = m.θs
 nparameters(m::RotationMatrix) = length(parameters(m))
 
-function pure_evolve_util(m::RotationMatrix{<:Real}, x::AbstractMatVec)
+function pure_evolve_util(m::RotationMatrix{<:Real}, x::AbstractVecOrMat)
 	rwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
 	y = _rx_real!(m.θs, x, _typed_copy(T, x), m.start_pos, rwork)
 	return y, rwork
 end
 
-function pure_evolve_util(m::RotationMatrix{<:Complex}, x::AbstractMatVec)
+function pure_evolve_util(m::RotationMatrix{<:Complex}, x::AbstractVecOrMat)
 	rwork, cwork = compute_workspace(m)
 	T = promote_type(eltype(m), eltype(x))
 	y = _rx_cpx!(m.θs, x, _typed_copy(T, x), m.start_pos, rwork, cwork)
 	return y, rwork, cwork
 end
-pure_evolve(m::RotationMatrix, x::AbstractMatVec) = pure_evolve_util(m, x)[1]
+pure_evolve(m::RotationMatrix, x::AbstractVecOrMat) = pure_evolve_util(m, x)[1]
 
 
-Zygote.@adjoint pure_evolve(m::RotationMatrix{<:Real}, x::AbstractMatVec) = begin
+Zygote.@adjoint pure_evolve(m::RotationMatrix{<:Real}, x::AbstractVecOrMat) = begin
 	y, rwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork = compute_workspace(m)
@@ -65,7 +67,7 @@ Zygote.@adjoint pure_evolve(m::RotationMatrix{<:Real}, x::AbstractMatVec) = begi
 		return ∇θ, Δ
 	end
 end
-Zygote.@adjoint pure_evolve(m::RotationMatrix{<:Complex}, x::AbstractMatVec) = begin
+Zygote.@adjoint pure_evolve(m::RotationMatrix{<:Complex}, x::AbstractVecOrMat) = begin
 	y, rwork, cwork = pure_evolve_util(m, x)
 	return y, Δ -> begin
 		# rwork, cwork = compute_workspace(m)
@@ -107,12 +109,12 @@ Zygote.@adjoint dm_evolve(m::RotationMatrix{<:Complex}, x::Union{AbstractMatrix,
 	end
 end
 
-function pure_back_propagate(Δ::AbstractMatVec, m::RotationMatrix{<:Real}, y::AbstractMatVec, rwork::Vector{<:Real})
+function pure_back_propagate(Δ::AbstractVecOrMat, m::RotationMatrix{<:Real}, y::AbstractVecOrMat, rwork::Vector{<:Real})
 	∇θ, Δ = _∇rx_real!(Δ, m.θs, y, m.start_pos, rwork)
 	return Δ, ∇θ, y
 end
 
-function pure_back_propagate(Δ::AbstractMatVec, m::RotationMatrix{<:Complex}, y::AbstractMatVec, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function pure_back_propagate(Δ::AbstractVecOrMat, m::RotationMatrix{<:Complex}, y::AbstractVecOrMat, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	∇θ, Δ = _∇rx_cpx!(Δ, m.θs, y, m.start_pos, rwork, cwork)
 	return Δ, ∇θ, y
 end
@@ -162,7 +164,7 @@ end
 	return real(∇θ), real(∇ϕ)
 end 
 
-function _rx_real!(θs, x::AbstractMatVec, y::AbstractMatVec, start_pos::Int, rwork::Vector{<:Real})
+function _rx_real!(θs, x::AbstractVecOrMat, y::AbstractVecOrMat, start_pos::Int, rwork::Vector{<:Real})
 	L = length(θs)
 	@assert length(rwork) >= 2*L
 	rwork2 = view(rwork, L+1:2*L)
@@ -185,7 +187,7 @@ function _rx_real!(θs, x::AbstractMatVec, y::AbstractMatVec, start_pos::Int, rw
 	return y
 end
 
-function _rx_cpx!(θs, x::AbstractMatVec, y::AbstractMatVec, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function _rx_cpx!(θs, x::AbstractVecOrMat, y::AbstractVecOrMat, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	L = div(length(θs), 2)
 	@assert length(rwork) >= 2*L
 	@assert length(cwork) >= L
@@ -311,7 +313,7 @@ function _rxrd_cpx!(θs, x::AbstractArray{<:Number, 3}, y::AbstractArray{<:Numbe
 end
 
 
-function _∇rx_real_util!(Δ::AbstractMatVec, θs, y::AbstractMatVec, start_pos::Int, rwork::Vector{<:Real}, ∇θ)
+function _∇rx_real_util!(Δ::AbstractVecOrMat, θs, y::AbstractVecOrMat, start_pos::Int, rwork::Vector{<:Real}, ∇θ)
 	L = length(θs)
 	rwork2 = view(rwork, L+1:2*L)
 
@@ -338,13 +340,13 @@ end
 	_∇rx_real!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real})
 	y = Ux, Δ is the gradient from the previous layer
 """
-function _∇rx_real!(Δ::AbstractMatVec, θs, y::AbstractMatVec, start_pos::Int, rwork::Vector{<:Real})
+function _∇rx_real!(Δ::AbstractVecOrMat, θs, y::AbstractVecOrMat, start_pos::Int, rwork::Vector{<:Real})
 	init_rwork!(θs, rwork)
 	Δ = convert(typeof(y), Δ)
 	return _∇rx_real_util!(Δ, θs, y, start_pos, rwork, zero(θs))
 end
 
-function _∇rx_cpx_util!(Δ::AbstractMatVec, θs, y::AbstractMatVec, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex}, ∇θ)
+function _∇rx_cpx_util!(Δ::AbstractVecOrMat, θs, y::AbstractVecOrMat, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex}, ∇θ)
 	L = div(length(θs), 2)
 	rwork2 = view(rwork, L+1:2*L)
 
@@ -373,7 +375,7 @@ end
 	_∇rx_cpx!(Δ::AbstractMatrix, θs, y::AbstractMatrix, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	y = Ux, Δ is the gradient from the previous layer
 """
-function _∇rx_cpx!(Δ::AbstractMatVec, θs, y::AbstractMatVec, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
+function _∇rx_cpx!(Δ::AbstractVecOrMat, θs, y::AbstractVecOrMat, start_pos::Int, rwork::Vector{<:Real}, cwork::Vector{<:Complex})
 	init_cwork!(θs, rwork, cwork)
 	Δ = convert(typeof(y), Δ)
 	return _∇rx_cpx_util!(Δ, θs, y, start_pos, rwork, cwork, zero(θs))
